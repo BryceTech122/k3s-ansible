@@ -81,12 +81,43 @@
 
 - name: Test metallb-system resources
   command: >-
-    k3s kubectl -n metallb-system get {{ item }}
+    k3s kubectl -n metallb-system get {{ src.item }}
   changed_when: false
   run_once: true
   with_items:
     - IPAddressPool
-    - L2Advertisement
+    - { src: L2Advertisement, when: metal_lb_mode == 'L2' }
+    - { src: BGPAdvertisement, when: metal_lb_mode == 'BGP' }
+    - { src: BGPPeer, when: metal_lb_mode == 'BGP' }
+
+- name: Join Rancher management cluster
+  command: >-
+    k3s kubectl apply -f {{ rancher_cluster_join_url }}
+  changed_when: false
+  when: (rancher_cluster_join_url is defined) and (ansible_hostname == hostvars[groups['master'][0]]['ansible_hostname'])
+
+- name: Wait for Rancher resources
+  command: >-
+    k3s kubectl wait {{ item.resource }}
+    --namespace='cattle-system'
+    {% if item.name | default(False) -%} {{ item.name }} {%- endif %}
+    {% if item.selector | default(False) -%} --selector='{{ item.selector }}' {%- endif %}
+    {% if item.condition | default(False) -%} {{ item.condition }} {%- endif %}
+    --timeout='{{ rancher_available_timeout }}'
+  changed_when: false
+  run_once: true
+  with_items:
+    - description: cattle-cluster-agent deployment
+      resource: deployment
+      name: cattle-cluster-agent
+      condition: --for condition=Available=True
+    - description: cattle-cluster-agent pods running
+      resource: pod
+      selector: app=cattle-cluster-agent
+      condition: --for condition=Ready=True
+  loop_control:
+    label: "{{ item.description }}"
+  when: rancher_cluster_join_url is defined
 
 - name: Remove tmp directory used for manifests
   file:
