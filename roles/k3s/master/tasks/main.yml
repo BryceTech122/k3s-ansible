@@ -59,10 +59,26 @@
     mode: 0644
   when: ansible_hostname == hostvars[groups['master'][0]]['ansible_hostname']
 
-- name: Copy ACE manifests to masters
+- name: Create ACE manifest directory on masters
+  file:
+    path: /var/lib/rancher/k3s/
+    state: directory
+    owner: root
+    group: root
+    mode: 0644
+
+- name: Copy ACE manifest to masters
   template:
     src: "kube-api-authn-webhook.yaml.j2"
     dest: "/var/lib/rancher/k3s/kube-api-authn-webhook.yaml"
+    owner: root
+    group: root
+    mode: 0644
+
+- name: Create ACE config directory on masters
+  file:
+    path: /etc/rancher/k3s/
+    state: directory
     owner: root
     group: root
     mode: 0644
